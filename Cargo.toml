@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 chrono = "0.4.41"
+dotenv = "0.15.0"
 image = "0.25.6"
 inquire = "0.7.5"
 mp4ameta = "0.13.0"

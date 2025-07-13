@@ -4,11 +4,16 @@ pub mod fpcalc_result;
 pub mod musicbrainz_id;
 pub mod recording_info;
 
+extern crate dotenv;
+
 use core::fmt::Write;
 use deezer::track::Track;
+use dotenv::dotenv;
+use std::env;
+use std::fs::rename;
 use std::io::Write as IoWrite;
 use std::{
-	fs::{self, File, create_dir, rename},
+	fs::{self, File, create_dir},
 	path::Path,
 	process::{Command, Stdio},
 };
@@ -23,6 +28,7 @@ use serde_json::from_str;
 #[allow(clippy::too_many_lines)]
 async fn main() {
 	let file_path = "6 - Believer.m4a";
+	dotenv().ok();
 
 	let fpcalc_output = Command::new("./fpcalc.exe")
 		.args(["-json", file_path])
@@ -32,9 +38,15 @@ async fn main() {
 		.wait_with_output()
 		.unwrap();
 
+	let mut api_key = String::new();
+	for (key, value) in env::vars() {
+		if key == "ACOUSTID_API_KEY" {
+			api_key = value;
+		}
+	}
+
 	let fpcal_result =
 		from_str::<FpcalcResult>(&String::from_utf8(fpcalc_output.stdout).unwrap()).unwrap();
-	let api_key = "7MQxyXKmsn".to_string();
 	let request = format!(
 		"https://api.acoustid.org/v2/lookup?client={api_key}&duration={}&fingerprint={}&meta=recordingids",
 		fpcal_result.duration.round(),
