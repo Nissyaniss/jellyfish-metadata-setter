@@ -3,6 +3,7 @@ pub mod deezer;
 pub mod fpcalc_result;
 pub mod musicbrainz_id;
 pub mod recording_info;
+pub mod wikipedia_response;
 
 extern crate dotenv;
 
@@ -20,12 +21,13 @@ use std::{
 	path::Path,
 	process::{Command, Stdio},
 };
+use wikipedia_response::WikipediaResponse;
 
 use fpcalc_result::FpcalcResult;
 use inquire::{CustomType, ui::RenderConfig};
 use mp4ameta::Tag;
 use recording_info::RecordingInfo;
-use serde_json::from_str;
+use serde_json::{Value, from_str};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -121,25 +123,31 @@ async fn main() {
 	let artist_path = Path::new(&artist.name);
 	let album_path = artist_path.join(Path::new(&album.title));
 
-	let (is_new_artist, is_new_album) = check_metadata(
+	let (is_new_artist, is_new_album, has_description, description) = check_metadata(
 		renamed_file,
 		recording_info.clone(),
 		artist_path,
 		&album_path,
-	);
+	)
+	.await;
 
 	if is_new_album {
 		get_cover(recording_info.clone(), &album_path, artist_path).await;
 	}
 
 	println!("Moving music to {}", album_path.to_str().unwrap());
-	let _ = rename(
-		renamed_file,
-		format!("{}/{renamed_file}", album_path.to_str().unwrap()),
-	);
+	// let _ = rename(
+	// 	renamed_file,
+	// 	format!("{}/{renamed_file}", album_path.to_str().unwrap()),
+	// );
 
 	if is_new_artist {
-		generate_artist_nfo(recording_info.clone(), artist_path);
+		generate_artist_nfo(
+			recording_info.clone(),
+			artist_path,
+			has_description,
+			&description,
+		);
 	}
 
 	if is_new_album {
@@ -206,7 +214,12 @@ fn generate_album_nfo(
 	let _ = write!(nfo_file, "{album_nfo}");
 }
 
-fn generate_artist_nfo(recording_info: RecordingInfo, artist_path: &Path) {
+fn generate_artist_nfo(
+	recording_info: RecordingInfo,
+	artist_path: &Path,
+	has_description: bool,
+	description: &String,
+) {
 	let artist = recording_info.artist;
 	let album = recording_info.album;
 	println!("Creating nfo file for artist {}.", artist.name);
@@ -217,7 +230,10 @@ fn generate_artist_nfo(recording_info: RecordingInfo, artist_path: &Path) {
 		"<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>"
 	);
 	let _ = writeln!(artist_nfo, "<artist>");
-	let _ = writeln!(artist_nfo, "\t<biography>WIP</biography>"); //WIP
+	if has_description {
+		let _ = writeln!(artist_nfo, "\t<biography>WIP</biography>"); //WIP
+	}
+	let _ = writeln!(artist_nfo, "\t<biography>{description}</biography>"); //WIP
 	let _ = writeln!(artist_nfo, "\t<title>{}</title>", artist.name);
 	let _ = writeln!(
 		artist_nfo,
@@ -305,18 +321,19 @@ async fn get_cover(recording_info: RecordingInfo, album_path: &Path, artist_path
 	let _ = artist_cover_image.save(format!("{}/folder.png", artist_path.to_str().unwrap()));
 }
 
-fn check_metadata(
+async fn check_metadata(
 	renamed_file: &String,
 	recording_info: RecordingInfo,
 	artist_path: &Path,
 	album_path: &Path,
-) -> (bool, bool) {
+) -> (bool, bool, bool, String) {
 	let recording = recording_info.recording;
 	let artist = recording_info.artist;
 	let album = recording_info.album;
 	let mut is_new_artist = false;
 	let mut is_new_album = false;
 	let mut tag = Tag::read_from_path(renamed_file).unwrap();
+	let mut descritpion = WikipediaResponse::default();
 
 	println!("Is there a title in metadata ? : {}", tag.title().is_some());
 	if tag.title().is_none() {
@@ -370,19 +387,45 @@ fn check_metadata(
 	}
 
 	if is_new_artist {
-		println!("Checking if {} as annotation", artist.name);
-		let annotation = artist.annotation;
-		if annotation.is_some() {
-			// not yet implemented
+		println!("Checking if {} as a Wikipedia description.", artist.name);
+		let body = reqwest::get(format!(
+			"https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro&explaintext&titles={}&format=json",
+			artist.name
+		)).await.unwrap().text().await.unwrap();
+		let res: Value = from_str(&body).unwrap();
+		if let Some(page) = res["query"]["pages"].as_object() {
+			if let Some((random_key, _)) = page.iter().next() {
+				descritpion =
+					from_str::<WikipediaResponse>(&res["query"]["pages"][random_key].to_string())
+						.unwrap();
+			}
+		}
+
+		if descritpion.missing.is_none() {
+			println!("Description found.");
 		} else {
-			println!("{} has no annotations", artist.name);
+			println!("{} has no description.", artist.name);
 		}
 	}
 
 	println!("Clearing comments...");
 	tag.set_comment("");
 	tag.write_to_path(renamed_file).unwrap();
-	(is_new_artist, is_new_album)
+	if descritpion.missing.is_none() {
+		(
+			is_new_artist,
+			is_new_album,
+			descritpion.missing.is_none(),
+			descritpion.extract.unwrap(),
+		)
+	} else {
+		(
+			is_new_artist,
+			is_new_album,
+			descritpion.missing.is_none(),
+			String::new(),
+		)
+	}
 }
 
 fn u32_to_seconds(seconds: f64) -> String {
