@@ -6,12 +6,15 @@ pub mod recording_info;
 
 extern crate dotenv;
 
+use clap::Parser;
 use core::fmt::Write;
 use deezer::track::Track;
 use dotenv::dotenv;
 use std::env;
 use std::fs::rename;
 use std::io::Write as IoWrite;
+use std::path::PathBuf;
+use std::process::exit;
 use std::{
 	fs::{self, File, create_dir},
 	path::Path,
@@ -24,10 +27,23 @@ use mp4ameta::Tag;
 use recording_info::RecordingInfo;
 use serde_json::from_str;
 
+#[derive(Parser)]
+#[command(version, about, long_about = None)]
+struct Args {
+	#[arg(help = "test")]
+	path: PathBuf,
+}
+
 #[tokio::main]
-#[allow(clippy::too_many_lines)]
 async fn main() {
-	let file_path = "6 - Believer.m4a";
+	let args = Args::parse();
+
+	if !args.path.exists() {
+		println!("Path \"{}\" does not exist.", args.path.to_str().unwrap());
+		exit(2);
+	}
+
+	let file_path = args.path.to_str().unwrap();
 	dotenv().ok();
 
 	let fpcalc_output = Command::new("./fpcalc.exe")

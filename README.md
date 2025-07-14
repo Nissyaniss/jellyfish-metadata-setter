@@ -1,7 +1,6 @@
 Tool to retrieve metadata + covers and generate the nfo files and folder for Jellyfish. THIS IS NOT USABLE **IN** JELLYFISH MAY BE PLANNED LATER BUT I HATE C#
 
 Missing (in order of priority):
-- ability to chose file
 - annotations/biography
 - ytb-dlp (that's why the binary is there)
 
