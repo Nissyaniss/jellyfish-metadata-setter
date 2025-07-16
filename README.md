@@ -6,7 +6,7 @@ So for example the band [Akara](https://www.youtube.com/channel/UCeJqhwrIBg_sTsq
 Also if there are multiple results for an artist name the descritpion will be the like of "... can be ... or ...".<br>
 My implementation is very basic.
 
-Now that yt-dlp is implemented I need to clean up the code (which is a mess right now) and add little functionnality (progress bars, better error handling...)
+Now that yt-dlp is implemented I need to add little functionnalities (progress bars, better error handling... (maybe ?))
 
 Big thanks to [Acoustid](https://github.com/acoustid) for fpcalc which this project is heavily using.<br>
 Also big thanks to [yt-dlp](https://github.com/yt-dlp/yt-dlp) for the amazing CLI.<br>
