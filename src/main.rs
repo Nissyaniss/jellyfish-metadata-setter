@@ -3,6 +3,7 @@ pub mod deezer;
 pub mod fpcalc_result;
 pub mod musicbrainz_id;
 pub mod recording_info;
+pub mod video;
 pub mod wikipedia_response;
 
 extern crate dotenv;
@@ -11,6 +12,7 @@ use clap::Parser;
 use core::fmt::Write;
 use deezer::track::Track;
 use dotenv::dotenv;
+use inquire::Text;
 use std::env;
 use std::fs::rename;
 use std::io::Write as IoWrite;
@@ -21,6 +23,7 @@ use std::{
 	path::Path,
 	process::{Command, Stdio},
 };
+use video::Video;
 use wikipedia_response::WikipediaResponse;
 
 use fpcalc_result::FpcalcResult;
@@ -31,25 +34,90 @@ use serde_json::{Value, from_str};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
-struct Args {
-	#[arg(help = "test")]
-	path: PathBuf,
-}
+struct Args {}
 
 #[tokio::main]
+#[allow(clippy::too_many_lines)]
 async fn main() {
 	let args = Args::parse();
 
-	if !args.path.exists() {
-		println!("Path \"{}\" does not exist.", args.path.to_str().unwrap());
-		exit(2);
+	let music_name = Text::new("What music do you want ?")
+		.with_help_message(
+			"Please use this template for better results : <artist> <song_name> audio",
+		)
+		.prompt()
+		.unwrap_or_else(|err| {
+			println!("Error while getting your response: {err}");
+			exit(1)
+		});
+
+	println!("The search may take some time be patient.");
+
+	let ytb_search_output = Command::new("./yt-dlp.exe")
+		.args([
+			format!("ytsearch10:\"{music_name}\""),
+			"--get-id".to_string(),
+			"--get-title".to_string(),
+			"--get-duration".to_string(),
+		])
+		.stdout(Stdio::piped())
+		.spawn()
+		.unwrap()
+		.wait_with_output()
+		.unwrap();
+
+	let video_list: Vec<Video> =
+		Video::from_yt_dlp(String::from_utf8_lossy(&ytb_search_output.stdout).as_ref());
+
+	for (i, video) in video_list.iter().enumerate() {
+		println!("{} - {video}", i + 1);
 	}
 
-	let file_path = args.path.to_str().unwrap();
+	let video_list_len = video_list.len();
+
+	let video_select_parser = &|i: &str| match i.parse::<usize>() {
+		Ok(val) => {
+			if val > video_list_len {
+				Err(())
+			} else {
+				Ok(val)
+			}
+		}
+		Err(_) => Err(()),
+	};
+
+	let help_message = format!("Le nombre doit etre entre 1-{video_list_len}");
+
+	let select_video =
+		inquire_number(video_list_len, help_message.as_str(), video_select_parser).prompt();
+
+	let video = video_list[select_video.unwrap() - 1].clone();
+
+	println!("Downloading the video...");
+	println!("This may take a while");
+
+	let _ = Command::new("./yt-dlp.exe")
+		.args([
+			video.yt_id,
+			"-x".to_string(),
+			"--audio-format".to_string(),
+			"m4a".to_string(),
+			"-o".to_string(),
+			"%(title)s.%(ext)s".to_string(),
+		])
+		.spawn()
+		.unwrap()
+		.wait()
+		.unwrap();
+
+	println!("Video Downloaded!");
+	println!("Starting to gather information.");
+
+	let file_path = format!("{}.m4a", video.title);
 	dotenv().ok();
 
 	let fpcalc_output = Command::new("./fpcalc.exe")
-		.args(["-json", file_path])
+		.args(["-json", file_path.as_ref()])
 		.stdout(Stdio::piped())
 		.spawn()
 		.unwrap()
@@ -97,7 +165,7 @@ async fn main() {
 	let recording_info = &recording_info_list[res];
 
 	println!(
-		"Selected :{} - {} by {} from the {} album",
+		"Selected : {} - {} by {} from the {} album",
 		res + 1,
 		recording_info.recording.title,
 		recording_info.artist.name,
@@ -136,10 +204,10 @@ async fn main() {
 	}
 
 	println!("Moving music to {}", album_path.to_str().unwrap());
-	// let _ = rename(
-	// 	renamed_file,
-	// 	format!("{}/{renamed_file}", album_path.to_str().unwrap()),
-	// );
+	let _ = rename(
+		renamed_file,
+		format!("{}/{renamed_file}", album_path.to_str().unwrap()),
+	);
 
 	if is_new_artist {
 		generate_artist_nfo(

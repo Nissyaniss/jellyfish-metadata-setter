@@ -1,14 +1,15 @@
-Tool to retrieve metadata + covers and generate the nfo files and folder for Jellyfish. THIS IS NOT USABLE **IN** JELLYFISH MAY BE PLANNED LATER BUT I HATE C#
+Tool to retrieve metadata + covers + music file and generate the nfo files and folder for Jellyfish.<br>
+THIS IS NOT USABLE **IN** JELLYFISH MAY BE PLANNED LATER BUT I HATE C#
 
 Description is NOT good, i haven't found a way to "search" wikipedia without scraping (and i don't want to do that)<br>
 So for example the band [Akara](https://www.youtube.com/channel/UCeJqhwrIBg_sTsqYQrXAk3Q) will have the [Akara street food](https://en.wikipedia.org/wiki/Akara) description because the band has no Wikipdia page but the name is already in use in the Wikipedia database.<br>
 Also if there are multiple results for an artist name the descritpion will be the like of "... can be ... or ...".<br>
 My implementation is very basic.
 
-Missing (in order of priority):
-- ytb-dlp (that's why the binary is there)
+Now that yt-dlp is implemented I need to clean up the code (which is a mess right now) and add little functionnality (progress bars, better error handling...)
 
 Big thanks to [Acoustid](https://github.com/acoustid) for fpcalc which this project is heavily using.<br>
+Also big thanks to [yt-dlp](https://github.com/yt-dlp/yt-dlp) for the amazing CLI.<br>
 Thanks to [MusicBrainz](https://musicbrainz.org/) and their amazing database.<br>
 Thanks to [Wikipedia](https://en.wikipedia.org) for the free API to retrieve descriptions.<br>
 And thanks [Deezer](https://www.deezer.com/en/) for the free API to retrieve cover.
